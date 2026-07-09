@@ -1,3 +1,4 @@
+<img src="logging.png" alt="HTB Logging Banner" />
 # 🛡️ HTB Logging – Walkthrough
 
 [![HTB](https://img.shields.io/badge/HackTheBox-Logging-blue?style=flat-square&logo=hackthebox)](https://www.hackthebox.com/)
